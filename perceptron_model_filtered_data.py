@@ -1,0 +1,89 @@
+
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+# Softmax function
+def softmax(x):
+    exp_x = np.exp(x - np.max(x))
+    return exp_x / exp_x.sum(axis=1, keepdims=True)
+
+# Load dataset
+df = pd.read_csv('ds_salaries.csv')  # Make sure the dataset is in the same directory
+
+# Filter dataset to include 'experience_level', 'job_title', and 'remote_ratio' features
+filtered_df = df[['experience_level', 'job_title', 'remote_ratio', 'salary_range']].dropna()
+
+# Encode categorical features
+encoded_df = pd.get_dummies(filtered_df[['experience_level', 'job_title', 'remote_ratio']], drop_first=True)
+X_filtered = encoded_df.values
+
+# Target variable
+y_filtered = filtered_df['salary_range'].values.astype(int)
+
+# Split dataset into training, validation, and test sets (60%, 20%, 20%)
+X_train_filtered, X_temp, y_train_filtered, y_temp = train_test_split(X_filtered, y_filtered, test_size=0.4, random_state=42)
+X_val_filtered, X_test_filtered, y_val_filtered, y_test_filtered = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
+
+# Normalize data
+scaler = StandardScaler()
+X_train_filtered = scaler.fit_transform(X_train_filtered)
+X_val_filtered = scaler.transform(X_val_filtered)
+X_test_filtered = scaler.transform(X_test_filtered)
+
+# Initialize weights and biases
+input_size_filtered = X_train_filtered.shape[1]
+output_size_filtered = len(np.unique(y_filtered))
+W_filtered = np.random.randn(input_size_filtered, output_size_filtered)
+b_filtered = np.zeros(output_size_filtered)
+
+# Hyperparameters
+learning_rate = 0.001
+epochs = 500
+best_mse = float('inf')
+early_stop_epochs = 5
+counter = 0
+
+# Training loop
+for epoch in range(epochs):
+    # Forward pass
+    z_filtered = np.dot(X_train_filtered, W_filtered) + b_filtered
+    a_filtered = softmax(z_filtered)
+    
+    # Validation MSE
+    val_z_filtered = np.dot(X_val_filtered, W_filtered) + b_filtered
+    val_a_filtered = softmax(val_z_filtered)
+    val_error_filtered = y_val_filtered - np.argmax(val_a_filtered, axis=1)
+    mse_filtered = np.mean(val_error_filtered ** 2)
+    
+    # Early stopping
+    if mse_filtered < best_mse:
+        best_mse = mse_filtered
+        counter = 0
+    else:
+        counter += 1
+        
+    if counter >= early_stop_epochs:
+        print(f"Early stopping at epoch {epoch}, best MSE: {best_mse}")
+        break
+    
+    # Backward pass
+    loss_filtered = -np.sum(np.log(a_filtered[range(len(y_train_filtered)), y_train_filtered]))
+    delta_filtered = a_filtered
+    delta_filtered[range(len(y_train_filtered)), y_train_filtered] -= 1
+    
+    # Update weights and biases
+    W_filtered -= learning_rate * np.dot(X_train_filtered.T, delta_filtered)
+    b_filtered -= learning_rate * np.sum(delta_filtered, axis=0)
+    
+# Make predictions on test set
+def perceptron_predict_filtered(X, W, b):
+    z = np.dot(X, W) + b
+    a = softmax(z)
+    return np.argmax(a, axis=1)
+
+# Test the model
+y_pred_filtered = perceptron_predict_filtered(X_test_filtered, W_filtered, b_filtered)
+accuracy_filtered = np.mean(y_pred_filtered == y_test_filtered.astype(int))
+print(f"Test accuracy: {accuracy_filtered}")
